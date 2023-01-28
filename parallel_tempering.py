@@ -39,7 +39,9 @@ def total_dist(points: list, medoids: np.array,) -> int:
   :param medoids: numpy array of the medoids
   :return: the sum of smallest Euclidean distances for all points
   """
-    return np.sum([np.min(np.linalg.norm(medoids - i, axis=1), axis=0) for i in points])
+    min_dists = [np.min(np.linalg.norm(medoids - i, axis=1), axis=0) for i in points]
+    # import ipdb; ipdb.set_trace()
+    return np.sum(min_dists)
 
 
 def remove_array(list_arr: np.array, arr: np.array) -> None:
@@ -79,18 +81,19 @@ def swap_medoids(medoids: np.array, points: list, T: float,) -> (np.array, int):
     # new_state represents the set of medoids
     new_state = copy.deepcopy(medoids)
     new_state.append(n_m)
-    remove_array(new_state, m)
+    
+    np.delete(new_state, np.where(new_state == m)[0])
 
     # f(x') or f_new_state is just total_dist(points, state)
     initial_f = total_dist(points, medoids)
     f_new_state = total_dist(points, new_state)
     # make the swap with a probability proportional to the transition probability
-    tp = float((math.e) ** (((-1 / T) * (initial_f - f_new_state))))
+    tp = min(1, float((math.e) ** (((-1 / T) * (initial_f - f_new_state)))))
     if random.random() < tp:
+        print('old:', medoids, '\n', 'new:', new_state)
         medoids = new_state
 
     total_loss = f_new_state
-
     return medoids, total_loss
 
 
@@ -103,25 +106,48 @@ def find_medoids(
     :param points: list of all the points (including the medoids)
     :param T: represents the temperature, affecting the model's transition probability
     :param possible_medoids: a dictionary that keeps track of the set of medoids for each temperature T
-    :param swap_count: the
+    :param swap_count: the number of swaps that have already been performed
     :return: the array of medoids after the swap
     """
 
     # run chains for various values of T  (temperature)
     # T is geometrically defined (T, 2T, 4T, 8T, etc.)
-    # continue swaps until convergence where the medoids prior to & after swapping are the same
     # medoids_p is the set of medoids prior to swapping
-    medoids_p = possible_medoids[
-        T
-    ]  # for the initialization, medoids is the set prior to swapping
+    # for the initialization, medoids is the set prior to swapping
+    medoids_p = possible_medoids[T]
 
     # medoids_a is the set of medoids after swapping
     medoids_a, pt_total_loss = swap_medoids(medoids_p, points, T)
     swap_count += 1
-    return medoids_a, pt_total_loss
+    return medoids_a, pt_total_loss, swap_count
 
 
-def main(points: list, T: float, k: int,) -> int:
+def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
+    """
+    Completes all possible swaps sets corresponding to a higher temperature and
+    a lower temperature, where the higher temperature has a lower loss than the
+    lower temperature
+
+    :param possible_medoids: a dictionary that keeps track of the set of medoids for each temperature T
+    :param loss: a dictionary with the total losses respective to each temperature
+    :param T_values: a list of all temperatures for each running chain
+    """
+
+    # if the loss with higher temperature is greater than the loss with lower temperature, we swap the set of medoids and the loss
+    for temp in T_values:
+        temp_idx = T_values.index(temp)
+        for greater_temp in T_values[temp_idx + 1 :]:
+            if loss[temp] < loss[greater_temp]:
+                possible_medoids[temp], possible_medoids[greater_temp] = (
+                    possible_medoids[greater_temp],
+                    possible_medoids[temp],
+                )
+                loss[temp], loss[greater_temp] = loss[greater_temp], loss[temp]
+    lowest_loss = loss[T_values[0]]
+    return (lowest_loss, possible_medoids, loss)
+
+
+def main(points: list, T: float, k: int, conv_condition: int,) -> int:
     """
   Returns k medoids for a set of points depending on a certain temperature
 
@@ -141,41 +167,38 @@ def main(points: list, T: float, k: int,) -> int:
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
     loss = {}
-    keys = [T * (2 ** i) for i in range(5)]
+    T_values = [T * (2 ** i) for i in range(20)]
     # initially, the medoids for each temperature chain is just the random sample generated above
-    for i in keys:
+    for i in T_values:
         possible_medoids[i] = medoids
 
-    while True:
-        # the condition for the while loop to run needs to be changed
-        for i in keys:
-            possible_medoids[i], loss[i] = find_medoids(
-                points, T, possible_medoids, swap_count
-            )
-
-        # make a random swap between sets corresponding to a higher temperature and a lower temperature
-        x, y = random.sample(keys, 2)
-        # if the loss with higher temperature is greater than the loss with lower temperature, we swap the set of medoids and the loss
-        if loss[min(x, y)] < loss[max(x, y)]:
-            possible_medoids[x], possible_medoids[y] = (
-                possible_medoids[y],
-                possible_medoids[x],
-            )
-            loss[x], loss[y] = loss[y], loss[x]
+    same = 0
+    lowest_loss_p = np.inf
+    while same < conv_condition:
+        for temp in T_values:
+            possible_medoids[temp], loss[temp], swap_count = find_medoids(
+                points, temp, possible_medoids, swap_count
+            ) # temp is T (the temperature value)
+        lowest_loss, possible_medoids, loss = swap_temp(
+            possible_medoids, loss, T_values
+        )
+        if lowest_loss == lowest_loss_p:
+            same += 1
+        else:
+            same = 0
+        lowest_loss_p = lowest_loss
 
     pypi_loss = pypi_faster_pam(points, k)
     print("For the value of T", T)
     print("Loss using parallel tempering: ", min(loss.values()))
     print("Loss using the in-built Pypi package: ", pypi_loss)
     print("Number of swaps before convergence", swap_count)
-    return medoids_a
+    print(loss)
+    return possible_medoids[T]
 
 
 if __name__ == "__main__":
     rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
 
-    T = 1000
-    for i in range(3):
-        T *= 2
-        print(T)
-        main(rand_points, T, k=5)
+    T = 10
+    main(rand_points, T, k=5, conv_condition=300)
