@@ -28,7 +28,7 @@ def pypi_faster_pam(points: list, k: int,) -> int:
     # uses the in-built Pypi FasterPAM package to find the overall loss
     diss = sklearn.metrics.pairwise.euclidean_distances(points)
     fp = kmedoids.fasterpam(diss, k)
-    return fp.loss
+    return fp.loss 
 
 
 def total_dist(points: list, medoids: np.array,) -> int:
@@ -61,7 +61,7 @@ def remove_array(list_arr: np.array, arr: np.array) -> None:
         raise ValueError("array not found in list.")
 
 
-def swap_medoids(medoids: np.array, points: list, T: float,) -> (np.array, int):
+def swap_medoids(medoids: np.array, points: list, T: float,) -> np.array:
     """
   Returns the best state and its respective loss for which the total Euclidean distance is smallest
 
@@ -72,27 +72,24 @@ def swap_medoids(medoids: np.array, points: list, T: float,) -> (np.array, int):
   """
     non_medoids = []
     for i in points:
-        if np.any(np.all(i == medoids, axis=1)):
+        if not np.any(np.all(i == medoids, axis=1)):
             non_medoids.append(i)
-
+    
     m = random.choice(medoids)
     n_m = random.choice(non_medoids)
 
     # new_state represents the set of medoids
     new_state = copy.deepcopy(medoids)
     new_state.append(n_m)
-    
-    np.delete(new_state, np.where(new_state == m)[0])
-
+    remove_array(new_state, m)
     # f(x') or f_new_state is just total_dist(points, state)
     initial_f = total_dist(points, medoids)
     f_new_state = total_dist(points, new_state)
     # make the swap with a probability proportional to the transition probability
-    tp = min(1, float((math.e) ** (((-1 / T) * (initial_f - f_new_state)))))
-    if random.random() < tp:
-        print('old:', medoids, '\n', 'new:', new_state)
-        medoids = new_state
-
+    tp = min(1, np.float128((math.e) ** (((-1 / T) * (initial_f - f_new_state)))))
+    if random.uniform(0, 1) < tp:
+        medoids = copy.deepcopy(new_state)
+    
     total_loss = f_new_state
     return medoids, total_loss
 
@@ -143,7 +140,7 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
                     possible_medoids[temp],
                 )
                 loss[temp], loss[greater_temp] = loss[greater_temp], loss[temp]
-    lowest_loss = loss[T_values[0]]
+    lowest_loss = min(loss.values())
     return (lowest_loss, possible_medoids, loss)
 
 
@@ -167,26 +164,26 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
     loss = {}
-    T_values = [T * (2 ** i) for i in range(20)]
+    T_values = [T * (2 ** i) for i in range(1000)]
     # initially, the medoids for each temperature chain is just the random sample generated above
     for i in T_values:
         possible_medoids[i] = medoids
 
     same = 0
-    lowest_loss_p = np.inf
+    medoids_p = medoids
     while same < conv_condition:
         for temp in T_values:
             possible_medoids[temp], loss[temp], swap_count = find_medoids(
                 points, temp, possible_medoids, swap_count
             ) # temp is T (the temperature value)
-        lowest_loss, possible_medoids, loss = swap_temp(
+        _, possible_medoids, loss = swap_temp(
             possible_medoids, loss, T_values
         )
-        if lowest_loss == lowest_loss_p:
+        if medoids == medoids_p:
             same += 1
         else:
             same = 0
-        lowest_loss_p = lowest_loss
+        medoids_p = medoids
 
     pypi_loss = pypi_faster_pam(points, k)
     print("For the value of T", T)
