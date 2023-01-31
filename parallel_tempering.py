@@ -196,6 +196,8 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
 
 if __name__ == "__main__":
     rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
-
+    dataset = rand_points #dataset is the set of randomly generated points
+    # change dataset to the import MNIST dataset instead
+    
     T = 10
-    main(rand_points, T, k=5, conv_condition=300)
+    main(list(dataset), T, k=5, conv_condition=300)
