@@ -15,9 +15,11 @@ print("Loss with FasterPAM:", fp.loss)
 
 # either dataset = list(X) for MNIST dataset or rand_points for smaller dataset
 dataset = list(X)
-T = [2, 3, 4, 5, 10]
-k = 5
+T = [2, 3, 4, 5, 10] # initial temperature value
+k = 5 # number of medoids
+# converging condition - the maximum number of iterations with no change in the set of medoids
 conv = [100, 250, 300, 500, 600]
+# the number of temperature values
 num = [10, 20, 40, 50, 100]
 
 for i in T:
