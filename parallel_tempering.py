@@ -16,21 +16,6 @@ def parse_args() -> None:
         help="Whether to print overall loss comparison (default: True)",
     )
 
-
-def pypi_faster_pam(points: list, k: int,) -> int:
-    """
-  Returns the overall loss using the in-built pypi package
-
-  :param points: list of all the points (including the medoids)
-  :param k: the number of medoids in a sample of points
-  :return: the total loss
-  """
-    # uses the in-built Pypi FasterPAM package to find the overall loss
-    diss = sklearn.metrics.pairwise.euclidean_distances(points)
-    fp = kmedoids.fasterpam(diss, k)
-    return fp.loss
-
-
 def total_dist(points: list, medoids: np.array,) -> int:
     """
   Adds up the closest_dist for each point with its closest medoid
@@ -183,10 +168,6 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
             same = 0
         medoids_p = medoids
 
-    pypi_loss = pypi_faster_pam(points, k)
-    print("For the value of T", T)
     print("Loss using parallel tempering: ", min(loss.values()))
-    print("Loss using the in-built Pypi package: ", pypi_loss)
     print("Number of swaps before convergence", swap_count)
-    print(loss)
-    return possible_medoids[T]
+    return possible_medoids[T], min(loss.values())
