@@ -1,7 +1,6 @@
 from parallel_tempering import main
 import kmedoids
-import numpy
-import time
+import numpy as np
 import random
 from sklearn.datasets import fetch_openml
 from sklearn.metrics.pairwise import euclidean_distances
