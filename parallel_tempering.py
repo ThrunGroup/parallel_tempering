@@ -129,14 +129,15 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
     return (lowest_loss, possible_medoids, loss)
 
 
-def main(points: list, T: float, k: int, conv_condition: int,) -> int:
+def main(points: list, T: float, k: int, conv_condition: int, num_temp : int) -> int:
     """
   Returns k medoids for a set of points depending on a certain temperature
 
   :param points: list of all the points (including the medoids)
   :param T: represents the temperature, affecting the model's transition probability
   :param k: the number of medoids in a sample of points
-  :return: the best state for medoids
+  :param num_temp: the number of temperature values
+  :return: the best state for medoids and its corresponding loss
   """
     args = parse_args()
 
@@ -149,7 +150,7 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
     loss = {}
-    T_values = [T * (2 ** i) for i in range(100)]
+    T_values = [T * (2 ** i) for i in range(num_temp)]
     # initially, the medoids for each temperature chain is just the random sample generated above
     for i in T_values:
         possible_medoids[i] = medoids
@@ -168,6 +169,5 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
             same = 0
         medoids_p = medoids
 
-    print("Loss using parallel tempering: ", min(loss.values()))
     print("Number of swaps before convergence", swap_count)
     return possible_medoids[T], min(loss.values())
