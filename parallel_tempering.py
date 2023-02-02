@@ -28,7 +28,7 @@ def pypi_faster_pam(points: list, k: int,) -> int:
     # uses the in-built Pypi FasterPAM package to find the overall loss
     diss = sklearn.metrics.pairwise.euclidean_distances(points)
     fp = kmedoids.fasterpam(diss, k)
-    return fp.loss 
+    return fp.loss
 
 
 def total_dist(points: list, medoids: np.array,) -> int:
@@ -74,7 +74,7 @@ def swap_medoids(medoids: np.array, points: list, T: float,) -> np.array:
     for i in points:
         if not np.any(np.all(i == medoids, axis=1)):
             non_medoids.append(i)
-    
+
     m = random.choice(medoids)
     n_m = random.choice(non_medoids)
 
@@ -89,7 +89,7 @@ def swap_medoids(medoids: np.array, points: list, T: float,) -> np.array:
     tp = min(1, np.float128((math.e) ** (((-1 / T) * (initial_f - f_new_state)))))
     if random.uniform(0, 1) < tp:
         medoids = copy.deepcopy(new_state)
-    
+
     total_loss = f_new_state
     return medoids, total_loss
 
@@ -164,7 +164,7 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
     loss = {}
-    T_values = [T * (2 ** i) for i in range(1000)]
+    T_values = [T * (2 ** i) for i in range(100)]
     # initially, the medoids for each temperature chain is just the random sample generated above
     for i in T_values:
         possible_medoids[i] = medoids
@@ -175,10 +175,8 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
         for temp in T_values:
             possible_medoids[temp], loss[temp], swap_count = find_medoids(
                 points, temp, possible_medoids, swap_count
-            ) # temp is T (the temperature value)
-        _, possible_medoids, loss = swap_temp(
-            possible_medoids, loss, T_values
-        )
+            )  # temp is T (the temperature value)
+        _, possible_medoids, loss = swap_temp(possible_medoids, loss, T_values)
         if medoids == medoids_p:
             same += 1
         else:
@@ -192,12 +190,3 @@ def main(points: list, T: float, k: int, conv_condition: int,) -> int:
     print("Number of swaps before convergence", swap_count)
     print(loss)
     return possible_medoids[T]
-
-
-if __name__ == "__main__":
-    rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
-    dataset = rand_points #dataset is the set of randomly generated points
-    # change dataset to the import MNIST dataset instead
-    
-    T = 10
-    main(list(dataset), T, k=5, conv_condition=300)
