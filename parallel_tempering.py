@@ -138,7 +138,13 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
     return (lowest_loss, possible_medoids, loss)
 
 
-def build_init(points, medoids):
+def build_init(points: list, medoids: np.array):
+    """
+    Returns a medoid according to the current set of k medoids giving the smallest possible loss overall
+    :param points: list of all the points (including the medoids)
+    :param medoids: array of the medoids
+    :return: the medoid to be added giving the lowest loss overall
+    """
     losses = np.array([total_dist(points, medoids + [i]) for i in points])
     medoid = [i for i in range(len(losses)) if losses[i] == np.min(losses)][0]
     return points[medoid]
@@ -195,8 +201,9 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     print(loss)
     return possible_medoids[T]
 
-if __name__== "__main__":
+
+if __name__ == "__main__":
     rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
     T = 100
-    main(rand_points, T, k=5, conv_condition=3000, num_temp = 10)
-    #cProfile.run(main(rand_points, T, k=5, conv_condition=3000, num_temp=10))
+    main(rand_points, T, k=5, conv_condition=3000, num_temp=10)
+    # cProfile.run(main(rand_points, T, k=5, conv_condition=3000, num_temp=10))
