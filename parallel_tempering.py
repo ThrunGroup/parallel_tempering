@@ -4,6 +4,7 @@ import kmedoids
 import numpy as np
 import argparse
 import copy
+import cProfile
 import sklearn.metrics
 
 
@@ -16,10 +17,23 @@ def parse_args() -> None:
         help="Whether to print overall loss comparison (default: True)",
     )
 
+
+def pypi_faster_pam(points: list, k: int,) -> int:
+    """
+  Returns the overall loss using the in-built pypi package
+  :param points: list of all the points (including the medoids)
+  :param k: the number of medoids in a sample of points
+  :return: the total loss
+  """
+    # uses the in-built Pypi FasterPAM package to find the overall loss
+    diss = sklearn.metrics.pairwise.euclidean_distances(points)
+    fp = kmedoids.fasterpam(diss, k)
+    return fp.loss
+
+
 def total_dist(points: list, medoids: np.array,) -> int:
     """
   Adds up the closest_dist for each point with its closest medoid
-
   :param points: list of all the points (including the medoids)
   :param medoids: numpy array of the medoids
   :return: the sum of smallest Euclidean distances for all points
@@ -42,14 +56,11 @@ def remove_array(list_arr: np.array, arr: np.array) -> None:
         ind += 1
     if ind != size:
         list_arr.pop(ind)
-    else:
-        raise ValueError("array not found in list.")
 
 
 def swap_medoids(medoids: np.array, points: list, T: float,) -> np.array:
     """
   Returns the best state and its respective loss for which the total Euclidean distance is smallest
-
   :param medoids: array of the medoids
   :param T: represents the temperature, affecting the model's transition probability
   :param points: list of all the points (including the medoids)
@@ -84,7 +95,6 @@ def find_medoids(
 ) -> np.array:
     """
     Returns the set of medoids after swapping for a particular value of T
-
     :param points: list of all the points (including the medoids)
     :param T: represents the temperature, affecting the model's transition probability
     :param possible_medoids: a dictionary that keeps track of the set of medoids for each temperature T
@@ -109,7 +119,6 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
     Completes all possible swaps sets corresponding to a higher temperature and
     a lower temperature, where the higher temperature has a lower loss than the
     lower temperature
-
     :param possible_medoids: a dictionary that keeps track of the set of medoids for each temperature T
     :param loss: a dictionary with the total losses respective to each temperature
     :param T_values: a list of all temperatures for each running chain
@@ -129,12 +138,17 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
     return (lowest_loss, possible_medoids, loss)
 
 
-def main(points: list, T: float, k: int, conv_condition: int, num_temp : int) -> int:
+def build_init(points, medoids):
+    losses = np.array([total_dist(points, medoids + [i]) for i in points])
+    medoid = [i for i in range(len(losses)) if losses[i] == np.min(losses)][0]
+    return points[medoid]
+
+
+def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> int:
     """
   Returns k medoids for a set of points depending on a certain temperature
-
   :param points: list of all the points (including the medoids)
-  :param T: represents the temperature, affecting the model's transition probability
+  :param T: represents the temperature, affecting the model's= transition probability
   :param k: the number of medoids in a sample of points
   :param num_temp: the number of temperature values
   :return: the best state for medoids and its corresponding loss
@@ -145,7 +159,11 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp : int) ->
     swap_count = 0
 
     # medoids currently represents the initialization of choosing the medoids
-    medoids = random.sample(points, k)
+    # the seeding process uses the BUILD step of PAM
+    medoids = []
+    for i in range(k):
+        medoids.append(build_init(points, medoids))
+    print("init", total_dist(points, medoids))
 
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
@@ -169,5 +187,16 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp : int) ->
             same = 0
         medoids_p = medoids
 
+    pypi_loss = pypi_faster_pam(points, k)
+    print("For the value of T", T)
+    print("Loss using parallel tempering: ", min(loss.values()))
+    print("Loss using the in-built Pypi package: ", pypi_loss)
     print("Number of swaps before convergence", swap_count)
-    return possible_medoids[T], min(loss.values())
+    print(loss)
+    return possible_medoids[T]
+
+if __name__== "__main__":
+    rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
+    T = 100
+    main(rand_points, T, k=5, conv_condition=3000, num_temp = 10)
+    #cProfile.run(main(rand_points, T, k=5, conv_condition=3000, num_temp=10))
