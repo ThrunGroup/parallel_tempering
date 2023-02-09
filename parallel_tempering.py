@@ -8,6 +8,7 @@ import cProfile
 import sklearn.metrics
 import matplotlib.pyplot as plt
 
+
 def parse_args() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -58,7 +59,9 @@ def remove_array(list_arr: np.array, arr: np.array) -> None:
         list_arr.pop(ind)
 
 
-def swap_medoids(medoids: np.array, points: list, T: float, swap_count: int) -> np.array:
+def swap_medoids(
+    medoids: np.array, points: list, T: float, swap_count: int, initial_loss: float
+) -> np.array:
     """
   Returns the best state and its respective loss for which the total Euclidean distance is smallest
   :param medoids: array of the medoids
@@ -82,8 +85,19 @@ def swap_medoids(medoids: np.array, points: list, T: float, swap_count: int) -> 
     initial_f = total_dist(points, medoids)
     f_new_state = total_dist(points, new_state)
     # make the swap with a probability proportional to the transition probability
-    tp = min(1, np.float128((math.e) ** (((-1 / T) * (initial_f - f_new_state)))))
-    print("tp is", tp)
+    tp = min(
+        1,
+        np.float128(
+            (math.e) ** (((-1 / (initial_loss * T)) * (initial_f - f_new_state)))
+        ),
+    )
+    print(initial_f, f_new_state)
+    print(
+        "tp is",
+        np.float128(
+            (math.e) ** (((-1 / (initial_loss * T)) * (initial_f - f_new_state)))
+        ),
+    )
     if random.uniform(0, 1) < tp:
         medoids = copy.deepcopy(new_state)
         swap_count += 1
@@ -94,7 +108,7 @@ def swap_medoids(medoids: np.array, points: list, T: float, swap_count: int) -> 
 
 
 def find_medoids(
-    points: list, T: float, possible_medoids: dict, swap_count: int,
+    points: list, T: float, possible_medoids: dict, swap_count: int, initial_loss: float
 ) -> np.array:
     """
     Returns the set of medoids after swapping for a particular value of T
@@ -112,7 +126,9 @@ def find_medoids(
     medoids_p = possible_medoids[T]
 
     # medoids_a is the set of medoids after swapping
-    medoids_a, pt_total_loss, swap_count = swap_medoids(medoids_p, points, T, swap_count)
+    medoids_a, pt_total_loss, swap_count = swap_medoids(
+        medoids_p, points, T, swap_count, initial_loss
+    )
     return medoids_a, pt_total_loss, swap_count
 
 
@@ -151,11 +167,13 @@ def build_init(points: list, medoids: np.array):
     medoid = [i for i in range(len(losses)) if losses[i] == np.min(losses)][0]
     return points[medoid]
 
+
 def pt_plot(loss: dict):
     plt.figure(figsize=[16, 8])
     for i in range(len(list(loss.keys()))):
         plt.plot(loss[list(loss.keys())[i]])
     plt.show()
+
 
 def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> int:
     """
@@ -178,6 +196,9 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
         medoids.append(build_init(points, medoids))
     print("init", total_dist(points, medoids))
 
+    # scale the transition probability with a factor of the initial loss
+    initial_loss = total_dist(points, medoids)
+
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
     loss = {}
@@ -193,7 +214,7 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     while same < conv_condition:
         for temp in T_values:
             possible_medoids[temp], loss[temp], swap_count = find_medoids(
-                points, temp, possible_medoids, swap_count
+                points, temp, possible_medoids, swap_count, initial_loss
             )  # temp is T (the temperature value)
             older_losses[temp].append(loss[temp])
         _, possible_medoids, loss = swap_temp(possible_medoids, loss, T_values)
@@ -209,12 +230,12 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     print("Loss using the in-built Pypi package: ", pypi_loss)
     print("Number of swaps before convergence", swap_count)
     print(loss)
-    pt_plot(loss)
+    # pt_plot(loss)
     return possible_medoids[T]
 
 
 if __name__ == "__main__":
     rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
-    T = 10000000
-    main(rand_points, T, k=5, conv_condition=3, num_temp=10)
+    T = 1000
+    main(rand_points, T, k=5, conv_condition=15, num_temp=10)
     # cProfile.run(main(rand_points, T, k=5, conv_condition=3000, num_temp=10))
