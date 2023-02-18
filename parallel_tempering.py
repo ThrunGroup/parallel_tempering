@@ -7,6 +7,7 @@ import copy
 import cProfile
 import sklearn.metrics
 import matplotlib.pyplot as plt
+from sklearn.datasets import fetch_openml
 
 
 def parse_args() -> None:
@@ -88,7 +89,7 @@ def swap_medoids(
     tp = min(
         1,
         np.float128(
-            (math.e) ** (((-1 / (initial_loss * T)) * (initial_f - f_new_state)))
+            (math.e) ** (((1 / (initial_loss * T)) * (initial_f - f_new_state)))
         ),
     )
     print(initial_f, f_new_state)
@@ -142,11 +143,11 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
     :param T_values: a list of all temperatures for each running chain
     """
 
-    # if the loss with higher temperature is greater than the loss with lower temperature, we swap the set of medoids and the loss
+    # if the loss with higher temperature is less than the loss with lower temperature, we swap the set of medoids and the loss
     for temp in T_values:
         temp_idx = T_values.index(temp)
         for greater_temp in T_values[temp_idx + 1 :]:
-            if loss[temp] < loss[greater_temp]:
+            if loss[temp] > loss[greater_temp]:
                 possible_medoids[temp], possible_medoids[greater_temp] = (
                     possible_medoids[greater_temp],
                     possible_medoids[temp],
@@ -168,11 +169,22 @@ def build_init(points: list, medoids: np.array):
     return points[medoid]
 
 
-def pt_plot(loss: dict):
+def pt_plot(history: dict, T_values: list):
+    """
+    Creates a parallel tempering plot 
+    :param history: stores all previous losses for each temperature
+    :param T_values: a list of all temperatures for each running chain
+    :return: None
+    """
     plt.figure(figsize=[16, 8])
-    for i in range(len(list(loss.keys()))):
-        plt.plot(loss[list(loss.keys())[i]])
+    for i in T_values:
+        xs = list(range(len(history[i])))
+        ys = history[i]  # include range (how many swaps) e.g. [0:100]
+        plt.plot(xs, ys, linewidth=2, label=f"{i}")
+    plt.legend()
     plt.show()
+    plt.close()
+    return None
 
 
 def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> int:
@@ -202,12 +214,12 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     # dictionaries containing the set of medoids and its respective overall loss for each value of T
     possible_medoids = {}
     loss = {}
-    older_losses = {}
+    history = {}
     T_values = [T * (2 ** i) for i in range(num_temp)]
     # initially, the medoids for each temperature chain is just the random sample generated above
     for i in T_values:
         possible_medoids[i] = medoids
-        older_losses[i] = []
+        history[i] = []
 
     same = 0
     medoids_p = medoids
@@ -216,7 +228,7 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
             possible_medoids[temp], loss[temp], swap_count = find_medoids(
                 points, temp, possible_medoids, swap_count, initial_loss
             )  # temp is T (the temperature value)
-            older_losses[temp].append(loss[temp])
+            history[temp].append(loss[temp])
         _, possible_medoids, loss = swap_temp(possible_medoids, loss, T_values)
         if medoids == medoids_p:
             same += 1
@@ -230,12 +242,18 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     print("Loss using the in-built Pypi package: ", pypi_loss)
     print("Number of swaps before convergence", swap_count)
     print(loss)
-    # pt_plot(loss)
+    pt_plot(history, T_values)
     return possible_medoids[T]
 
 
 if __name__ == "__main__":
+    # np.random.seed(1)
+    # random.seed(1)
     rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
-    T = 1000
-    main(rand_points, T, k=5, conv_condition=15, num_temp=10)
+
+    X, _ = fetch_openml("mnist_784", version=1, return_X_y=True, as_frame=False)
+    mnist = X[:1000]
+    T = 0.001
+    main(rand_points, T, k=5, conv_condition=300, num_temp=10)
+    # main(mnist, T, k=5, conv_condition=500, num_temp=10)
     # cProfile.run(main(rand_points, T, k=5, conv_condition=3000, num_temp=10))
