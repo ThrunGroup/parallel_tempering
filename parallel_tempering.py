@@ -22,12 +22,12 @@ def parse_args() -> None:
 
 def pypi_faster_pam(points: list, k: int,) -> int:
     """
-  Returns the overall loss using the in-built pypi package
-  :param points: list of all the points (including the medoids)
-  :param k: the number of medoids in a sample of points
-  :return: the total loss
-  """
-    # uses the in-built Pypi FasterPAM package to find the overall loss
+    Returns the overall loss using the in-built pypi package
+    :param points: list of all the points (including the medoids)
+    :param k: the number of medoids in a sample of points
+    :return: the total loss
+    """
+    # uses the Pypi FasterPAM kmedoids package to find the overall loss
     diss = sklearn.metrics.pairwise.euclidean_distances(points)
     fp = kmedoids.fasterpam(diss, k)
     return fp.loss
@@ -35,13 +35,12 @@ def pypi_faster_pam(points: list, k: int,) -> int:
 
 def total_dist(points: list, medoids: np.array,) -> int:
     """
-  Adds up the closest_dist for each point with its closest medoid
-  :param points: list of all the points (including the medoids)
-  :param medoids: numpy array of the medoids
-  :return: the sum of smallest Euclidean distances for all points
-  """
+    Adds up the closest_dist for each point with its closest medoid
+    :param points: list of all the points (including the medoids)
+    :param medoids: numpy array of the medoids
+    :return: the sum of smallest Euclidean distances for all points
+    """
     min_dists = [np.min(np.linalg.norm(medoids - i, axis=1), axis=0) for i in points]
-    # import ipdb; ipdb.set_trace()
     return np.sum(min_dists)
 
 
@@ -56,6 +55,7 @@ def remove_array(list_arr: np.array, arr: np.array) -> None:
     size = len(list_arr)
     while ind != size and not np.array_equal(list_arr[ind], arr):
         ind += 1
+
     if ind != size:
         list_arr.pop(ind)
 
@@ -64,12 +64,12 @@ def swap_medoids(
     medoids: np.array, points: list, T: float, swap_count: int, initial_loss: float
 ) -> np.array:
     """
-  Returns the best state and its respective loss for which the total Euclidean distance is smallest
-  :param medoids: array of the medoids
-  :param T: represents the temperature, affecting the model's transition probability
-  :param points: list of all the points (including the medoids)
-  :return: the set of medoids after the swap with largest transition probability
-  """
+    Returns the best state and its respective loss for which the total Euclidean distance is smallest
+    :param medoids: array of the medoids
+    :param T: represents the temperature, affecting the model's transition probability
+    :param points: list of all the points (including the medoids)
+    :return: the set of medoids after the swap with largest transition probability
+    """
     non_medoids = []
     for i in points:
         if not np.any(np.all(i == medoids, axis=1)):
@@ -93,18 +93,14 @@ def swap_medoids(
         ),
     )
     print(initial_f, f_new_state)
-    print(
-        "tp is",
-        np.float128(
-            (math.e) ** (((-1 / (initial_loss * T)) * (initial_f - f_new_state)))
-        ),
-    )
+    # print("tp is", np.float128((math.e) ** (((-1 / (initial_loss * T)) * (initial_f - f_new_state)))))
     if random.uniform(0, 1) < tp:
         medoids = copy.deepcopy(new_state)
         swap_count += 1
         total_loss = f_new_state
     else:
         total_loss = initial_f
+
     return medoids, total_loss, swap_count
 
 
@@ -153,6 +149,7 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
                     possible_medoids[temp],
                 )
                 loss[temp], loss[greater_temp] = loss[greater_temp], loss[temp]
+
     lowest_loss = min(loss.values())
     return (lowest_loss, possible_medoids, loss)
 
@@ -169,18 +166,23 @@ def build_init(points: list, medoids: np.array):
     return points[medoid]
 
 
-def pt_plot(history: dict, T_values: list):
+def pt_plot(history: dict, T_values: list, start: int, end: int):
     """
     Creates a parallel tempering plot 
     :param history: stores all previous losses for each temperature
     :param T_values: a list of all temperatures for each running chain
+    :param start: the beginning of the range to display swaps from
+    :param end: the end of the range mentioned above
     :return: None
     """
     plt.figure(figsize=[16, 8])
     for i in T_values:
+        x = history[i]
+        history[i] = x[start:end]  # include range (how many swaps) e.g. [10:100]
         xs = list(range(len(history[i])))
-        ys = history[i]  # include range (how many swaps) e.g. [0:100]
+        ys = history[i]
         plt.plot(xs, ys, linewidth=2, label=f"{i}")
+
     plt.legend()
     plt.show()
     plt.close()
@@ -189,13 +191,13 @@ def pt_plot(history: dict, T_values: list):
 
 def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> int:
     """
-  Returns k medoids for a set of points depending on a certain temperature
-  :param points: list of all the points (including the medoids)
-  :param T: represents the temperature, affecting the model's= transition probability
-  :param k: the number of medoids in a sample of points
-  :param num_temp: the number of temperature values
-  :return: the best state for medoids and its corresponding loss
-  """
+    Returns k medoids for a set of points depending on a certain temperature
+    :param points: list of all the points (including the medoids)
+    :param T: represents the temperature, affecting the model's= transition probability
+    :param k: the number of medoids in a sample of points
+    :param num_temp: the number of temperature values
+    :return: the best state for medoids and its corresponding loss
+    """
     args = parse_args()
 
     # parameter keeps track of the number of swaps
@@ -206,6 +208,7 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     medoids = []
     for i in range(k):
         medoids.append(build_init(points, medoids))
+
     print("init", total_dist(points, medoids))
 
     # scale the transition probability with a factor of the initial loss
@@ -242,18 +245,20 @@ def main(points: list, T: float, k: int, conv_condition: int, num_temp: int) -> 
     print("Loss using the in-built Pypi package: ", pypi_loss)
     print("Number of swaps before convergence", swap_count)
     print(loss)
-    pt_plot(history, T_values)
+
+    # include specifc range of swaps (start to end) and the temperature values to plot
+    pt_plot(history, T_values=[0.001, 0.032, 0.512], start=0, end=50)
     return possible_medoids[T]
 
 
 if __name__ == "__main__":
-    # np.random.seed(1)
-    # random.seed(1)
+    np.random.seed(1)
+    random.seed(1)
     rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
 
     X, _ = fetch_openml("mnist_784", version=1, return_X_y=True, as_frame=False)
-    mnist = X[:1000]
+    mnist = X[:10000]
     T = 0.001
     main(rand_points, T, k=5, conv_condition=300, num_temp=10)
     # main(mnist, T, k=5, conv_condition=500, num_temp=10)
-    # cProfile.run(main(rand_points, T, k=5, conv_condition=3000, num_temp=10))
+    # cProfile.runctx('main(rand_points, T, k=5, conv_condition=300, num_temp=10)', globals(),locals())
