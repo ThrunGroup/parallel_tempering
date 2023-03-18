@@ -6,7 +6,8 @@ from sklearn.metrics.pairwise import euclidean_distances
 
 rand_points = list(np.random.randint(1, 1000, size=(100, 2)))
 X, _ = fetch_openml('mnist_784', version=1, return_X_y=True, as_frame=False)
-X = X[:10000]
+data_sample = 10000
+X = X[:data_sample]
 diss = euclidean_distances(X)
 fp = kmedoids.fasterpam(diss, 100)
 print("Loss with FasterPAM:", fp.loss)
@@ -14,7 +15,7 @@ print("Loss with FasterPAM:", fp.loss)
 # either dataset = list(X) for MNIST dataset or rand_points for smaller dataset
 dataset = list(X)
 T = [2, 3, 4, 5, 10] # initial temperature value
-k = 5 # number of medoids
+k = 5  # number of medoids
 # converging condition - the maximum number of iterations with no change in the set of medoids
 conv = [100, 250, 300, 500, 600]
 # the number of temperature values
