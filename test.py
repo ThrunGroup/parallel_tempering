@@ -24,5 +24,5 @@ for i in T:
     for j in conv:
         for n in num:
             print(f'T is {i}, conv is {j}, num_temp is {n}.')
-            _, loss = main(dataset, T = i, k = k, conv_condition = j, num_temp = n)
+            _, loss = main(dataset, T=i, k=k, conv_condition=j, num_temp=n)
             print("Loss using parallel tempering is ", loss)
