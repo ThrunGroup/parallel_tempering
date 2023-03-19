@@ -7,4 +7,5 @@ Using parallel tempering may improve the overall loss for k-medoids. We're compa
 For the data, it's currently randomly generated and this data generation is also a part of the `parallel_tempering.py` file.
 
 To run the program on command line with appropriate parameters from argparse, use the following format:
-"parallel_tempering.py --verbose True --iterations 100" (you can change the number accordingly to output in the parallel tempering plot)
+
+`parallel_tempering.py --verbose True --iterations 100` (you can change the number accordingly to output in the parallel tempering plot)
