@@ -4,6 +4,7 @@ import kmedoids
 import numpy as np
 import argparse
 import copy
+import time
 import cProfile
 import sklearn.metrics
 import matplotlib.pyplot as plt
@@ -11,6 +12,7 @@ from sklearn.datasets import fetch_openml
 from xml.etree import ElementTree
 from cProfile import Profile
 from pyprof2calltree import convert, visualize
+
 
 def pypi_faster_pam(points: list, k: int,) -> float:
     """
@@ -25,14 +27,21 @@ def pypi_faster_pam(points: list, k: int,) -> float:
     return fp.loss
 
 
-def total_dist(points: list, medoids: np.array,) -> int:
+def total_dist(points: list, medoids: np.array,) -> np.ndarray:
     """
     Adds up the closest_dist for each point with its closest medoid
     :param points: list of all the points (including the medoids)
     :param medoids: numpy array of the medoids
     :return: the sum of smallest Euclidean distances for all points
     """
-    min_dists = [np.min(np.linalg.norm(medoids - i, axis=1), axis=0) for i in points]
+    points = np.array(points)
+    medoids = np.array(medoids)
+    distances_sq = np.sum(
+        np.square(np.subtract(medoids[:, np.newaxis, :], points)), axis=-1
+    )
+    min_dists = np.sqrt(np.min(distances_sq, axis=0))
+    # min_dists = [np.min(np.linalg.norm(medoids - i, axis=1), axis=0) for i in points]
+
     return np.sum(min_dists)
 
 
@@ -82,9 +91,7 @@ def swap_medoids(
     # make the swap with a probability proportional to the transition probability
     tp = min(
         1,
-        np.float128(
-            (math.e) ** ((1 / (initial_loss * T)) * (initial_f - f_new_state))
-        ),
+        np.float128((math.e) ** ((1 / (initial_loss * T)) * (initial_f - f_new_state))),
     )
     print(initial_f, f_new_state)
     if random.uniform(0, 1) < tp:
@@ -122,7 +129,7 @@ def find_medoids(
     return medoids_a, pt_total_loss, swap_count
 
 
-def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
+def chain_swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> (dict, dict):
     """
     Completes all possible swaps sets corresponding to a higher temperature and
     a lower temperature, where the higher temperature has a lower loss than the
@@ -135,7 +142,7 @@ def swap_temp(possible_medoids: dict, loss: dict, T_values: list) -> int:
     # we swap the set of medoids and the loss
     for temp in T_values:
         temp_idx = T_values.index(temp)
-        for greater_temp in T_values[temp_idx + 1:]:
+        for greater_temp in T_values[temp_idx + 1 :]:
             if loss[temp] > loss[greater_temp]:
                 possible_medoids[temp], possible_medoids[greater_temp] = (
                     possible_medoids[greater_temp],
@@ -158,7 +165,9 @@ def build_init(points: list, medoids: np.array):
     return points[medoid]
 
 
-def pt_plot(history: dict, T_values: list, start: int, end: int, pypi_loss: int) -> None:
+def pt_plot(
+    history: dict, T_values: list, start: int, end: int, pypi_loss: int
+) -> None:
     """
     Creates a parallel tempering plot 
     :param history: stores all previous losses for each temperature
@@ -176,14 +185,20 @@ def pt_plot(history: dict, T_values: list, start: int, end: int, pypi_loss: int)
         ys = history[i]
         plt.plot(xs, ys, linewidth=2, label=f"{i}")
 
-    plt.axhline(y=pypi_loss, color='r', linestyle='-.')
+    plt.axhline(y=pypi_loss, color="r", linestyle="-.")
     plt.legend()
     plt.show()
     plt.close()
     return None
 
 
-def main(points: list, temperature: float, num_medoids: int, conv_condition: int, num_temp: int) -> int:
+def main(
+    points: list,
+    temperature: float,
+    num_medoids: int,
+    conv_condition: int,
+    num_temp: int,
+) -> list:
     """
     Returns k medoids for a set of points depending on a certain temperature
     :param points: list of all the points (including the medoids)
@@ -194,10 +209,18 @@ def main(points: list, temperature: float, num_medoids: int, conv_condition: int
     :return: the best state for medoids and its corresponding loss
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--verbose", type=bool, default=True,
-                        help="Whether to print overall loss comparison (default: True)")
-    parser.add_argument("--iterations", type=int, default=-1,
-                        help="which part of the parallel tempering plot to display")
+    parser.add_argument(
+        "--verbose",
+        type=bool,
+        default=True,
+        help="Whether to print overall loss comparison (default: True)",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=-1,
+        help="which part of the parallel tempering plot to display",
+    )
 
     args = parser.parse_args()
 
@@ -207,7 +230,7 @@ def main(points: list, temperature: float, num_medoids: int, conv_condition: int
     # medoids currently represents the initialization of choosing the medoids
     # the seeding process uses the BUILD step of PAM
     medoids = []
-    for i in range(k):
+    for i in range(num_medoids):
         medoids.append(build_init(points, medoids))
 
     # scale the transition probability with a factor of the initial loss
@@ -226,7 +249,7 @@ def main(points: list, temperature: float, num_medoids: int, conv_condition: int
         history[i] = []
 
     same = 0
-    
+
     # medoids_p is the set of medoids prior to swapping
     medoids_p = medoids
     while same < conv_condition:
@@ -234,30 +257,32 @@ def main(points: list, temperature: float, num_medoids: int, conv_condition: int
             possible_medoids[temp], loss[temp], swap_count = find_medoids(
                 points, temp, possible_medoids, swap_count, initial_loss
             )  # temp is T (the temperature value)
-            
+
             history[temp].append(loss[temp])
-        possible_medoids, loss = swap_temp(possible_medoids, loss, T_values)
+        possible_medoids, loss = chain_swap_temp(possible_medoids, loss, T_values)
         same = same + 1 if medoids == medoids_p else 0
         medoids_p = medoids
 
-    pypi_loss = pypi_faster_pam(points, k)
-    print("For the value of T", T)
-    print("Loss using parallel tempering: ", min(loss.values()))
-    print("Loss using the kmedoids Pypi package: ", pypi_loss)
-    print("Number of swaps before convergence", swap_count)
-    print(loss)
+    pypi_loss = pypi_faster_pam(points, num_medoids)
+    if args.verbose == True:
+        print("For the value of T", T)
+        print("Loss using parallel tempering: ", min(loss.values()))
+        print("Loss using the kmedoids Pypi package: ", pypi_loss)
+        print("Number of swaps before convergence", swap_count)
+        print(loss)
 
     # include specific range of swaps (start to end) and the temperature values to plot
     end = args.iterations
     pt_plot(history, T_values, start=0, end=end, pypi_loss=pypi_loss)
     return possible_medoids[T]
 
+
 def profiling():
-    xml_content = '<a>\n' + '\t<b/><c><d>text</d></c>\n' * 100 + '</a>'
+    xml_content = "<a>\n" + "\t<b/><c><d>text</d></c>\n" * 100 + "</a>"
     profiler = Profile()
     profiler.runctx("ElementTree.fromstring(xml_content)", locals(), globals())
     visualize(profiler.getstats())  # run kcachegrind
-    convert(profiler.getstats(), 'profiling_results.kgrind')  # save for later
+    convert(profiler.getstats(), "profiling_results.kgrind")  # save for later
 
 
 if __name__ == "__main__":
@@ -267,12 +292,15 @@ if __name__ == "__main__":
 
     X, _ = fetch_openml("mnist_784", version=1, return_X_y=True, as_frame=False)
     data_sample = 1000
-    mnist = X[:data_sampledata_sample]
+    mnist = X[:data_sample]
     T = 0.001
-    profiling()
-    main(rand_points, T, 5, 800, 10)
+    # profiling()
     # to run the code with the mnist dataset instead, uncomment the below line
-    # main(mnist, T, k=5, conv_condition=500, num_temp=10)
+    start_time = time.time()
+    main(rand_points, T, num_medoids=5, conv_condition=300, num_temp=10)
+    # main(mnist, T, num_medoids=5, conv_condition=300, num_temp=10)
+    end_time = time.time()
+    print("time taken: ", end_time - start_time)
 
     # to profile the code using cprofile, uncomment the below line
     # it provides a breakdown of the amount of time spent in each function
